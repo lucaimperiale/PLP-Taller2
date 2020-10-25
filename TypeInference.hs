@@ -66,32 +66,90 @@ infer' (SuccExp e)    n = case infer' e n of
 -- COMPLETAR DESDE AQUI
 
 infer' ZeroExp                n = OK (n,(emptyContext,ZeroExp,TNat))
--- infer' (VarExp x)             n = undefined
-infer' (VarExp x)             n = OK (n+1,(extendC emptyContext x (TVar (n+1)),VarExp x ,(TVar (n+1))))
+infer' (VarExp x)             n = OK (n+1,(extendC emptyContext x (TVar n),VarExp x ,TVar n))
 infer' (AppExp u v)           n = case infer' u n of 
                                     OK(n_u,(c1,exprM,tau)) ->
                                       case infer' v n_u of
                                         OK (n_v,(c2,exprN,rho)) ->
-                                          case mgu [(tau,TFun rho (TVar (n_v+1))), ???]
+                                          case mgu ( [(tau,TFun rho (TVar (n_v)))] ++ map (\x -> (evalC c1 x,evalC c2 x))(filter (\y -> elem y (domainC c2)) (domainC c1))) of
                                             UOK subst -> OK (n_v+1,
                                                     (
                                                      joinC [subst <.> c1,subst <.> c2],
-                                                     subst <.> SuccExp e',
-                                                     TNat
+                                                     subst <.> AppExp exprM exprN,
+                                                     subst <.> TVar (n_v)
                                                     )
                                                 )
                                             UError u1 u2 -> uError u1 u2
                                         res@(Error _) -> res
                                     res@(Error _) -> res
-infer' (LamExp x _ e)         n = undefined
+infer' (LamExp x _ e)         n = case infer' e n of
+                                    OK (n', (c', e', t')) ->
+                                      if elem x (domainC c') then OK (n',
+                                                    (
+                                                     removeC c' x,
+                                                     LamExp x (evalC c' x) e',
+                                                     TFun (evalC c' x) t'
+                                                    ))
+                                                            else OK (n'+1,
+                                                    (
+                                                     removeC c' x,
+                                                     LamExp x (TVar n') e',
+                                                     TFun (TVar n') t'
+                                                    ))
+                                      
+                                    res@(Error _) -> res
 
 -- OPCIONALES
 
-infer' (PredExp e)            n = undefined
-infer' (IsZeroExp e)          n = undefined
-infer' TrueExp                n = undefined
-infer' FalseExp               n = undefined
-infer' (IfExp u v w)          n = undefined
+infer' (PredExp e)            n = case infer' e n of
+                                    OK (n', (c', e', t')) ->
+                                      case mgu [(t', TNat)] of
+                                        UOK subst -> OK (n',
+                                                            (
+                                                             subst <.> c',
+                                                             subst <.> PredExp e',
+                                                             TNat
+                                                            )
+                                                        )
+                                        UError u1 u2 -> uError u1 u2
+                                    res@(Error _) -> res
+infer' (IsZeroExp e)          n = case infer' e n of
+                                    OK (n', (c', e', t')) ->
+                                      case mgu [(t', TNat)] of
+                                        UOK subst -> OK (n',
+                                                            (
+                                                             subst <.> c',
+                                                             subst <.> IsZeroExp e',
+                                                             TBool
+                                                            )
+                                                        )
+                                        UError u1 u2 -> uError u1 u2
+                                    res@(Error _) -> res
+infer' TrueExp                n = OK (n,(emptyContext,TrueExp,TBool))
+infer' FalseExp               n = OK (n,(emptyContext,FalseExp,TBool))
+infer' (IfExp u v w)          n = case infer' u n of 
+                                    OK(n_u,(c1,exprM,rho)) ->
+                                      case infer' v n_u of
+                                        OK (n_v,(c2,exprP,sigma)) ->
+                                          case infer' w n_v of
+                                            OK (n_w,(c3,exprQ,tau)) ->
+                                              case mgu ([(sigma,tau),(rho,TBool)] 
+                                                          ++ map (\x -> (evalC c1 x,evalC c2 x))(filter (\y -> elem y (domainC c2)) (domainC c1))
+                                                          ++ map (\x -> (evalC c1 x,evalC c3 x))(filter (\y -> elem y (domainC c3)) (domainC c1))
+                                                          ++ map (\x -> (evalC c2 x,evalC c3 x))(filter (\y -> elem y (domainC c3)) (domainC c2))
+
+                                                              ) of
+                                                UOK subst -> OK (n_w,
+                                                                        (
+                                                                        joinC [subst <.> c1,subst <.> c2,subst <.> c3],
+                                                                        subst <.> IfExp exprM exprP exprQ,
+                                                                        subst <.> sigma
+                                                                        )
+                                                                    )
+                                                UError u1 u2 -> uError u1 u2
+                                            res@(Error _) -> res
+                                        res@(Error _) -> res
+                                    res@(Error _) -> res
 
 -- EXTENSIÓN
 
