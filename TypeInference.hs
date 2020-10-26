@@ -153,9 +153,49 @@ infer' (IfExp u v w)          n = case infer' u n of
 
 -- EXTENSIÓN
 
-infer' (EmptyListExp _)       n = undefined
-infer' (ConsExp u v)          n = undefined
-infer' (ZipWithExp u v x y w) n = undefined
+infer' (EmptyListExp _)       n = OK (n+1,(emptyContext,EmptyListExp (TVar n),TList  (TVar n)))
+infer' (ConsExp u v)          n = case infer' u n of 
+                                    OK(n_u,(c1,exprM,rho)) ->
+                                      case infer' v n_u of
+                                        OK (n_v,(c2,exprN,tau)) ->
+                                          case mgu ( [(tau,TList rho)] ++ map (\x -> (evalC c1 x,evalC c2 x))(filter (\y -> elem y (domainC c2)) (domainC c1))) of
+                                            UOK subst -> OK (n_v,
+                                                    (
+                                                     joinC [subst <.> c1,subst <.> c2],
+                                                     subst <.> ConsExp exprM exprN,
+                                                     subst <.> TList rho
+                                                    )
+                                                )
+                                            UError u1 u2 -> uError u1 u2
+                                        res@(Error _) -> res
+                                    res@(Error _) -> res
+infer' (ZipWithExp u v x y w) n = case infer' u n of 
+                                    OK(n_u,(c1,exprM,sigma)) ->
+                                      case infer' v n_u of
+                                        OK (n_v,(c2,exprN,rho)) ->
+                                          case infer' w n_v of
+                                            OK (n_w,(c3,exprO,tau)) ->
+                                              let c3' = removeC (removeC c3 x) y 
+                                                  tx = if elem x (domainC c3) then evalC c3 x else TVar n_w
+                                                  ty = if elem y (domainC c3) then evalC c3 y else TVar (n_w+1)                                                  
+ 
+                                                  in case mgu ([(TList tx,sigma),(TList ty,rho)] 
+                                                              ++ map (\x -> (evalC c1 x,evalC c2 x))(filter (\y -> elem y (domainC c2)) (domainC c1))
+                                                              ++ map (\x -> (evalC c1 x,evalC c3' x))(filter (\y -> elem y (domainC c3')) (domainC c1))
+                                                              ++ map (\x -> (evalC c2 x,evalC c3' x))(filter (\y -> elem y (domainC c3')) (domainC c2))
+
+                                                                  ) of
+                                                      UOK subst -> OK (n_w+2,
+                                                                              (
+                                                                              joinC [subst <.> c1,subst <.> c2,subst <.> c3'],
+                                                                              subst <.> ZipWithExp exprM exprN x y exprO,
+                                                                              subst <.> TList tau
+                                                                              )
+                                                                          )
+                                                      UError u1 u2 -> uError u1 u2
+                                            res@(Error _) -> res
+                                        res@(Error _) -> res
+                                    res@(Error _) -> res
 
 --------------------------------
 -- YAPA: Error de unificacion --
