@@ -33,12 +33,14 @@ tests = do runTestTT allTests
 allTests = test [
   "ejercicio1" ~: testEj1,
   "ejercicio2" ~: testEj2,
-  "ejercicio3" ~: testEj3
+  "ejercicio3" ~: testEj3,
+  "extra" ~: testExtra
   ]
 
 testEj1 = concat [testZeroExp, testVarExp, testAppExp, testLamExp]
 testEj2 = concat [testPredExp, testIsZeroExp, testTrueExp, testFalseExp, testIfExp]
 testEj3 = concat [testEmptyListExp, testConsExp, testZipWithExp]
+testExtra = testExp [38..41]
 
 -- tests ejercicio 1
 testZeroExp = testExp [1,2]
